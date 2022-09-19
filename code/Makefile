@@ -11,7 +11,7 @@ CC=	gcc
 CFLAGS= -g 
 ## Turn on this for more warnings:
 #CFLAGS= -g -Wall -pedantic
-LIBS= -lreadline -ltermcap
+LIBS= -lreadline
 
 .SUFFIXES: .c .o
 

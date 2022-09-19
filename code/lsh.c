@@ -24,6 +24,8 @@
 #include <readline/history.h>
 #include "parse.h"
 
+#include <unistd.h>
+
 #define TRUE 1
 #define FALSE 0
 
@@ -32,6 +34,10 @@ void DebugPrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
 
+void printenv();
+
+extern char **environ;
+
 int main(void)
 {
   Command cmd;
@@ -39,6 +45,8 @@ int main(void)
 
   while (TRUE)
   {
+    printenv();
+    printf("\n");
     char *line;
     line = readline("> ");
 
@@ -74,7 +82,22 @@ int main(void)
  */
 void RunCommand(int parse_result, Command *cmd)
 {
+  int pid;
+
   DebugPrintCommand(parse_result, cmd);
+  pid = fork();
+  if (pid == -1) {
+    printf("Could not fork current process\n");
+    return;
+  }
+  if (pid == 0) {
+    //// Child process
+    //char *pname = cmd->pgm->pgmlist[0];
+    //char **pargs = cmd->pgm->pgmlist + 1;
+    //execve(pname, pargs);
+  } else {
+    // Parent prosess (shell)
+  }
 }
 
 
@@ -154,3 +177,15 @@ void stripwhite(char *string)
 
   string[++i] = '\0';
 }
+
+
+// Assumes environemnt is not too big
+void printenv()
+{
+  int i = 0;
+  while (environ[i]) {
+    printf("%s\n", environ[i]);
+    i++;
+  }
+}
+

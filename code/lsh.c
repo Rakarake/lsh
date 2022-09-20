@@ -83,40 +83,47 @@ int main(void)
  */
 void RunCommand(int parse_result, Command *cmd)
 {
-  char *pname = cmd->pgm->pgmlist[0];
-  char **pname_args = cmd->pgm->pgmlist;
-  char **pargs = cmd->pgm->pgmlist + 1;
+  Pgm *current_pgm = cmd->pgm;
+  while (current_pgm != NULL) {
+    char *pname = current_pgm->pgmlist[0];
+    char **pname_args = current_pgm->pgmlist;
+    char **pargs = current_pgm->pgmlist + 1;
 
-  //First, handle special commands (exit, cd)
-  if (!strcmp(pname, "exit")) {
-    printf("goodbye! 👋");
-    exit(0);
-  } else if (!strcmp(pname, "cd")) {
-    chdir(pargs[0]);
-    return;
-  }
+    //First, handle special commands (exit, cd)
+    if (!strcmp(pname, "exit")) {
+      printf("goodbye! 👋");
+      exit(0);
+    } else if (!strcmp(pname, "cd")) {
+      chdir(pargs[0]);
+      return;
+    }
 
-  int pid;
+    // Create process
+    int pid;
+    DebugPrintCommand(parse_result, cmd);
+    pid = fork();
+    if (pid == -1) {
+      printf("could not fork current process\n");
+      return;
+    }
+    if (pid == 0) {
+      // Child process
+      //execlp(pname, pname, NULL);
+      execvp(pname, pname_args);
+    } else {
+      // Parent prosess (shell)
+      wait(NULL);
+    }
 
-  DebugPrintCommand(parse_result, cmd);
-  pid = fork();
-  if (pid == -1) {
-    printf("Could not fork current process\n");
-    return;
-  }
-  if (pid == 0) {
-    // Child process
-    //execlp(pname, pname, NULL);
-    execvp(pname, pname_args);
-  } else {
-    // Parent prosess (shell)
-    wait(NULL);
+    // TODO: make this process pipe output to next process' input
+    // Next command
+    current_pgm = current_pgm->next;
   }
 }
 
 
 /* 
- * Print a Command structure as returned by parse on stdout. 
+ * Print a Comcand structure as returned by parse on stdout. 
  * 
  * Helper function, no need to change. Might be useful to study as inpsiration.
  */

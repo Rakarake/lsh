@@ -26,6 +26,7 @@
 
 #include <unistd.h>
 #include <sys/wait.h>
+#include <string.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -82,6 +83,19 @@ int main(void)
  */
 void RunCommand(int parse_result, Command *cmd)
 {
+  char *pname = cmd->pgm->pgmlist[0];
+  char **pname_args = cmd->pgm->pgmlist;
+  char **pargs = cmd->pgm->pgmlist + 1;
+
+  //First, handle special commands (exit, cd)
+  if (!strcmp(pname, "exit")) {
+    printf("goodbye! 👋");
+    exit(0);
+  } else if (!strcmp(pname, "cd")) {
+    chdir(pargs[0]);
+    return;
+  }
+
   int pid;
 
   DebugPrintCommand(parse_result, cmd);
@@ -92,9 +106,8 @@ void RunCommand(int parse_result, Command *cmd)
   }
   if (pid == 0) {
     // Child process
-    char *pname = cmd->pgm->pgmlist[0];
-    char **pargs = cmd->pgm->pgmlist + 1;
-    execlp(pname, pname, NULL);
+    //execlp(pname, pname, NULL);
+    execvp(pname, pname_args);
   } else {
     // Parent prosess (shell)
     wait(NULL);

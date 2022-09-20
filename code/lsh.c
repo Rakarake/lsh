@@ -25,6 +25,7 @@
 #include "parse.h"
 
 #include <unistd.h>
+#include <sys/wait.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -45,7 +46,6 @@ int main(void)
 
   while (TRUE)
   {
-    printenv();
     printf("\n");
     char *line;
     line = readline("> ");
@@ -91,12 +91,13 @@ void RunCommand(int parse_result, Command *cmd)
     return;
   }
   if (pid == 0) {
-    //// Child process
-    //char *pname = cmd->pgm->pgmlist[0];
-    //char **pargs = cmd->pgm->pgmlist + 1;
-    //execve(pname, pargs);
+    // Child process
+    char *pname = cmd->pgm->pgmlist[0];
+    char **pargs = cmd->pgm->pgmlist + 1;
+    execlp(pname, pname, NULL);
   } else {
     // Parent prosess (shell)
+    wait(NULL);
   }
 }
 

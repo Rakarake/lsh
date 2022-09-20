@@ -40,18 +40,21 @@ void PrintPgm(Pgm *);
 void stripwhite(char *);
 
 void process_pgm();
-void catch_signal_int(int signum);
 void printenv();
+void catch_sigint(int signum);
+void catch_sigchld(int signum);
 
 extern char **environ;
+
 
 int main(void)
 {
   Command cmd;
   int parse_result;
 
-  // Register sigint (Ctrl-C)
-  signal(SIGINT, catch_signal_int);
+  // Register signals
+  signal(SIGINT, catch_sigint);
+  signal(SIGCHLD, catch_sigchld);
 
   while (TRUE)
   {
@@ -91,7 +94,7 @@ int main(void)
  */
 
 void RunCommand(int parse_result, Command *cmd) {
-  DebugPrintCommand(parse_result, cmd);
+  //DebugPrintCommand(parse_result, cmd);
 
   // Shell commands (exit, cd)
   char *pname = cmd->pgm->pgmlist[0];
@@ -111,7 +114,11 @@ void RunCommand(int parse_result, Command *cmd) {
     process_pgm(cmd->pgm);
   } else {
     // Parent process (shell)
-    wait(NULL);
+    if (cmd->background) {
+      printf("you are free my process!");
+    } else {
+      wait(NULL);
+    }
   }
 }
 
@@ -136,18 +143,13 @@ void process_pgm(Pgm *pgm) {
     }
 
     if (ppid == 0) {
-      // The end who wants to write (the child)
-      close(pipe_fd[READ_END]);
-      // Set the output stream to the pipe write end
-      dup2(pipe_fd[WRITE_END], 1);
+      close(pipe_fd[READ_END]);     // The end who wants to write (the child)
+      dup2(pipe_fd[WRITE_END], 1);  // Set the output stream to the pipe write end
       process_pgm(pgm->next);
     } else {
-      // The end who wants to read (the parent)
-      close(pipe_fd[WRITE_END]);
-      // Set the input stream to the pipe read end
-      dup2(pipe_fd[READ_END], 0);
-      // Execute the reading process process
-      execvp(pname, pname_args);
+      close(pipe_fd[WRITE_END]);  // The end who wants to read (the parent)
+      dup2(pipe_fd[READ_END], 0); // Set the input stream to the pipe read end
+      execvp(pname, pname_args);  // Execute the reading process process
     }
   } else {
     execvp(pname, pname_args);
@@ -155,14 +157,31 @@ void process_pgm(Pgm *pgm) {
 }
 
 
-void catch_signal_int(int signum) {
+// INT (Ctrl-C)
+void catch_sigint(int signum) {
   // Set function to handle signal again
-  signal(SIGINT, catch_signal_int);
+  signal(SIGINT, catch_sigint);
+  printf("\n> ");
 
-  printf("Haha, lol no!");
-  exit(0);
+  // We do not need to send a sigint to the child process in the foregorund,
+  // we need to make sure it does not reach processes in the background!
 }
 
+// CHILD (when child terminates and other things)
+void catch_sigchld(int signum) {
+  // Wait will fail if foreground process, since we have already waited
+  int child_pid = wait(NULL);
+  // Return of wait is equal to current_pid
+  if (child_pid == -1) {
+    // Foreground process
+    printf("foreground process terminated\n");
+  } else {
+    // Background process
+    printf("background process terminated\n");
+    printf("> ");
+    fflush(stdout); // stdout is line buffered by default
+  }
+}
 
 /* 
  * Print a Comcand structure as returned by parse on stdout. 

@@ -40,6 +40,7 @@ void PrintPgm(Pgm *);
 void stripwhite(char *);
 
 void process_pgm();
+void catch_signal_int(int signum);
 void printenv();
 
 extern char **environ;
@@ -48,6 +49,9 @@ int main(void)
 {
   Command cmd;
   int parse_result;
+
+  // Register sigint (Ctrl-C)
+  signal(SIGINT, catch_signal_int);
 
   while (TRUE)
   {
@@ -150,70 +154,14 @@ void process_pgm(Pgm *pgm) {
   }
 }
 
-//void RunCommand(int parse_result, Command *cmd)
-//{
-//  Pgm *current_pgm = cmd->pgm;
-//  while (current_pgm != NULL) {
-//    char *pname = current_pgm->pgmlist[0];
-//    char **pname_args = current_pgm->pgmlist;
-//    char **pargs = current_pgm->pgmlist + 1;
-//
-//    //First, handle special commands (exit, cd)
-//    if (!strcmp(pname, "exit")) {
-//      printf("goodbye! 👋");
-//      exit(0);
-//    } else if (!strcmp(pname, "cd")) {
-//      chdir(pargs[0]);
-//      return;
-//    }
-//
-//    // Create process
-//    int pid;
-//    DebugPrintCommand(parse_result, cmd);
-//    pid = fork();
-//    if (pid == -1) {
-//      printf("could not fork current process!\n");
-//      exit(1);
-//    }
-//    if (pid == 0) {
-//      // If other elements in linked-list, create pipe and fork again
-//      if (current_pgm->next != NULL) {
-//        int pipe_fd[2];
-//
-//        if (pipe(pipe_fd) == -1) {
-//          fprintf(stderr,"Pipe failed");
-//          exit(1);
-//        }
-//
-//        int ppid = fork();
-//        if (ppid == -1) {
-//          printf("pipe-fork failed!\n");
-//          exit(1);
-//        }
-//
-//        if (ppid == 0) {
-//          // The end who wants to write (the child)
-//          close(pipe_fd[READ_END]);
-//          // Set the output stream to the pipe write end
-//          dup2(pipe_fd[WRITE_END], 1);
-//        } else {
-//          // The end who wants to read (the parent)
-//          close(pipe_fd[WRITE_END]);
-//          // Set the input stream to the pipe read end
-//          dup2(pipe_fd[READ_END], 0);
-//          // Execute the reading process process
-//          execvp(pname, pname_args);
-//        }
-//      }
-//    } else {
-//      // Parent prosess (shell)
-//      wait(NULL);
-//    }
-//
-//    // Next command
-//    current_pgm = current_pgm->next;
-//  }
-//}
+
+void catch_signal_int(int signum) {
+  // Set function to handle signal again
+  signal(SIGINT, catch_signal_int);
+
+  printf("Haha, lol no!");
+  exit(0);
+}
 
 
 /* 

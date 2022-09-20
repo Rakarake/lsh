@@ -88,6 +88,19 @@ int main(void)
 
 void RunCommand(int parse_result, Command *cmd) {
   DebugPrintCommand(parse_result, cmd);
+
+  // Shell commands (exit, cd)
+  char *pname = cmd->pgm->pgmlist[0];
+  char **pargs = cmd->pgm->pgmlist + 1;
+  // TODO remove :q, only for convenience
+  if ((!strcmp(pname, "exit")) || (!strcmp(pname, ":q"))) {
+    printf("goodbye! 👋");
+    exit(0);
+  } else if (!strcmp(pname, "cd")) {
+    chdir(pargs[0]);
+    return;
+  }
+
   int pid = fork();
   if (pid == 0) {
     // Child process (fork)
@@ -103,21 +116,12 @@ void process_pgm(Pgm *pgm) {
   char **pname_args = pgm->pgmlist;
   char **pargs =      pgm->pgmlist + 1;
 
-  // Shell commands (exit, cd)
-  if (!strcmp(pname, "exit")) {
-    printf("goodbye! 👋");
-    exit(0);
-  } else if (!strcmp(pname, "cd")) {
-    chdir(pargs[0]);
-    return;
-  }
-
   if (pgm->next != NULL) {
     // Create pipe, then fork
     int pipe_fd[2];
 
     if (pipe(pipe_fd) == -1) {
-      fprintf(stderr,"Pipe failed");
+      fprintf(stderr,"pipe failed!\n");
       exit(1);
     }
 

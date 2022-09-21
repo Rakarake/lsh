@@ -176,11 +176,12 @@ void process_pgm(Pgm *pgm) {
     } else {
       close(pipe_fd[WRITE_END]);  // The end who wants to read (the parent)
       dup2(pipe_fd[READ_END], 0); // Set the input stream to the pipe read end
-      execvp(pname, pname_args);  // Execute the reading process process
     }
-  } else {
-    execvp(pname, pname_args);
   }
+  // Parent (maybe without child)
+  int err = execvp(pname, pname_args);
+  printf("lsh: command not found: %s\n", pname);
+  exit(1);
 }
 
 

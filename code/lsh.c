@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <fcntl.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -45,6 +46,8 @@ void catch_sigint(int signum);
 void catch_sigchld(int signum);
 
 extern char **environ;
+
+int fgpid = 0;
 
 
 int main(void)
@@ -94,7 +97,7 @@ int main(void)
  */
 
 void RunCommand(int parse_result, Command *cmd) {
-  //DebugPrintCommand(parse_result, cmd);
+  DebugPrintCommand(parse_result, cmd);
 
   // Shell commands (exit, cd)
   char *pname = cmd->pgm->pgmlist[0];
@@ -111,13 +114,37 @@ void RunCommand(int parse_result, Command *cmd) {
   int pid = fork();
   if (pid == 0) {
     // Child process (fork)
+    // Handle input/output file redirection
+    if (cmd->rstdout != NULL) {
+      // Create new file and connect stdout
+      int fd = open(cmd->rstdout, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+      if (fd == -1) {
+        printf("could not open file: %s\n", cmd->rstdout);
+      } else {
+        dup2(fd, 1);
+      }
+    }
+    if (cmd->rstdin != NULL) {
+      // Create new file and connect stdin
+      int fd = open(cmd->rstdin, O_RDONLY, O_RDWR);
+      if (fd == -1) {
+        printf("could not read file: %s\n", cmd->rstdin);
+      } else {
+        dup2(fd, 0);
+      }
+    }
     process_pgm(cmd->pgm);
   } else {
     // Parent process (shell)
     if (cmd->background) {
       printf("you are free my process!");
     } else {
-      wait(NULL);
+      fgpid = pid;
+      // TODO: must add so that we do not wait for background processes
+      //wait(NULL);
+      int status = waitpid(pid, NULL, 0);
+      fgpid = 0;
+      //printf("Waited for process!: %p\n", status);
     }
   }
 }
@@ -170,16 +197,19 @@ void catch_sigint(int signum) {
 // CHILD (when child terminates and other things)
 void catch_sigchld(int signum) {
   // Wait will fail if foreground process, since we have already waited
-  int child_pid = wait(NULL);
+  int child_pid = waitpid(-1, NULL, WNOHANG);
   // Return of wait is equal to current_pid
   if (child_pid == -1) {
+    fgpid = 0;
     // Foreground process
-    printf("foreground process terminated\n");
+    //printf("foreground process terminated: %p\n", child_pid);
+    //printf("> ");
+    //fflush(stdout);
   } else {
     // Background process
-    printf("background process terminated\n");
+    printf("background process terminated: %p\n", child_pid);
     printf("> ");
-    fflush(stdout); // stdout is line buffered by default
+    fflush(stdout);
   }
 }
 

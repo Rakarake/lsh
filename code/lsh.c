@@ -95,13 +95,13 @@ void RunCommand(int parse_result, Command *cmd) {
   char *pname = cmd->pgm->pgmlist[0];
   char **pargs = cmd->pgm->pgmlist + 1;
   if ((!strcmp(pname, "exit")) || (!strcmp(pname, ":q"))) {
-    printf("goodbye! 👋");
     exit(0);
   } else if (!strcmp(pname, "cd")) {
     chdir(pargs[0]);
     return;
   }
 
+  // Before fork, make sure that if background process, don't recieve sigint
   int pid = fork();
   if (pid == 0) {
     // Child process (fork)
@@ -128,7 +128,10 @@ void RunCommand(int parse_result, Command *cmd) {
   } else {
     // Parent process (shell)
     if (cmd->background) {
-      printf("you are free my process!");
+      //printf("you are free my process!");
+      // Set group pid of background process to something elses so it does not
+      // react to SIGINT
+      setpgid(pid, pid);
     } else {
       fgpid = pid;
       // Wait until fgpid has been resolved by singal hanlder
@@ -178,9 +181,9 @@ void process_pgm(Pgm *pgm) {
 
 // INT (Ctrl-C)
 void catch_sigint(int signum) {
-  printf("signum: %i\n", signum == SIGINT);
   // Set function to handle signal again
   signal(SIGINT, catch_sigint);
+  printf("signum: %i\n", signum == SIGINT);
   printf("\n> ");
 
   // We do not need to send a sigint to the child process in the foregorund,

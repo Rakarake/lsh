@@ -97,7 +97,7 @@ int main(void)
  */
 
 void RunCommand(int parse_result, Command *cmd) {
-  DebugPrintCommand(parse_result, cmd);
+  //DebugPrintCommand(parse_result, cmd);
 
   // Shell commands (exit, cd)
   char *pname = cmd->pgm->pgmlist[0];
@@ -140,11 +140,12 @@ void RunCommand(int parse_result, Command *cmd) {
       printf("you are free my process!");
     } else {
       fgpid = pid;
-      // TODO: must add so that we do not wait for background processes
-      //wait(NULL);
-      waitpid(pid, NULL, 0);
+      // Wait until fgpid has been resolved by singal hanlder
+      while (fgpid != 0) {
+        pause();
+      }
       fgpid = 0;
-      //printf("Waited for process!: %p\n", status);
+      printf("Waited for process! AMOGUS SSSS  S SS\n");
     }
   }
 }
@@ -201,17 +202,13 @@ void catch_sigchld(int signum) {
   // Wait will fail if foreground process, since we have already waited
   int child_pid = waitpid(-1, NULL, WNOHANG);
   // Return of wait is equal to current_pid
-  if (child_pid == -1) {
+  if (child_pid == fgpid) {
     fgpid = 0;
     // Foreground process
-    //printf("foreground process terminated: %p\n", child_pid);
-    //printf("> ");
-    //fflush(stdout);
+    //printf("foreground process terminated: %i\n", child_pid);
   } else {
     // Background process
     printf("background process terminated: %i\n", child_pid);
-    printf("> ");
-    fflush(stdout);
   }
 }
 

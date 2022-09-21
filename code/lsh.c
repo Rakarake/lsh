@@ -87,22 +87,13 @@ int main(void)
 }
 
 
-/* Execute the given command(s).
-
- * Note: The function currently only prints the command(s).
- * 
- * TODO: 
- * 1. Implement this function so that it executes the given command(s).
- * 2. Remove the debug printing before the final submission.
- */
-
+// Execute the given command(s).
 void RunCommand(int parse_result, Command *cmd) {
   //DebugPrintCommand(parse_result, cmd);
 
   // Shell commands (exit, cd)
   char *pname = cmd->pgm->pgmlist[0];
   char **pargs = cmd->pgm->pgmlist + 1;
-  // TODO remove :q, only for convenience
   if ((!strcmp(pname, "exit")) || (!strcmp(pname, ":q"))) {
     printf("goodbye! 👋");
     exit(0);
@@ -145,11 +136,11 @@ void RunCommand(int parse_result, Command *cmd) {
         pause();
       }
       fgpid = 0;
-      printf("Waited for process! AMOGUS SSSS  S SS\n");
     }
   }
 }
 
+// Recursive function to hanlde processes
 void process_pgm(Pgm *pgm) {
   char *pname =       pgm->pgmlist[0];
   char **pname_args = pgm->pgmlist;

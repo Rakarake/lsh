@@ -142,7 +142,7 @@ void RunCommand(int parse_result, Command *cmd) {
       fgpid = pid;
       // TODO: must add so that we do not wait for background processes
       //wait(NULL);
-      int status = waitpid(pid, NULL, 0);
+      waitpid(pid, NULL, 0);
       fgpid = 0;
       //printf("Waited for process!: %p\n", status);
     }
@@ -152,7 +152,6 @@ void RunCommand(int parse_result, Command *cmd) {
 void process_pgm(Pgm *pgm) {
   char *pname =       pgm->pgmlist[0];
   char **pname_args = pgm->pgmlist;
-  char **pargs =      pgm->pgmlist + 1;
 
   if (pgm->next != NULL) {
     // Create pipe, then fork
@@ -179,7 +178,7 @@ void process_pgm(Pgm *pgm) {
     }
   }
   // Parent (maybe without child)
-  int err = execvp(pname, pname_args);
+  execvp(pname, pname_args);
   printf("lsh: command not found: %s\n", pname);
   exit(1);
 }
@@ -187,6 +186,7 @@ void process_pgm(Pgm *pgm) {
 
 // INT (Ctrl-C)
 void catch_sigint(int signum) {
+  printf("signum: %i\n", signum == SIGINT);
   // Set function to handle signal again
   signal(SIGINT, catch_sigint);
   printf("\n> ");
@@ -194,6 +194,7 @@ void catch_sigint(int signum) {
   // We do not need to send a sigint to the child process in the foregorund,
   // we need to make sure it does not reach processes in the background!
 }
+
 
 // CHILD (when child terminates and other things)
 void catch_sigchld(int signum) {
@@ -208,7 +209,7 @@ void catch_sigchld(int signum) {
     //fflush(stdout);
   } else {
     // Background process
-    printf("background process terminated: %p\n", child_pid);
+    printf("background process terminated: %i\n", child_pid);
     printf("> ");
     fflush(stdout);
   }

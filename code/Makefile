@@ -10,7 +10,7 @@ OBJS=	parse.o lsh.o
 CC=	gcc
 CFLAGS= -g 
 ## Turn on this for more warnings:
-#CFLAGS= -g -Wall -pedantic
+CFLAGS= -g -Wall -pedantic
 LIBS= -lreadline
 
 .SUFFIXES: .c .o

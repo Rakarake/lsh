@@ -153,13 +153,13 @@ void process_pgm(Pgm *pgm) {
     int pipe_fd[2];
 
     if (pipe(pipe_fd) == -1) {
-      fprintf(stderr,"pipe failed!\n");
+      fprintf(stderr, "pipe failed!\n");
       exit(1);
     }
 
     int ppid = fork();
     if (ppid == -1) {
-      printf("pipe-fork failed!\n");
+      fprintf(stderr, "pipe-fork failed!\n");
       exit(1);
     }
 
@@ -174,7 +174,7 @@ void process_pgm(Pgm *pgm) {
   }
   // Parent (maybe without child)
   execvp(pname, pname_args);
-  printf("lsh: command not found: %s\n", pname);
+  fprintf(stderr, "lsh: command not found: %s\n", pname);
   exit(1);
 }
 
@@ -197,7 +197,7 @@ void catch_sigchld(int signum) {
     // Do not create prompt, will happen when calling the read function
   } else {
     // Background process
-    printf("background process terminated: %i\n", child_pid);
+    fprintf(stderr, "background process terminated: %i\n", child_pid);
     // If there is a prompt: write it out again
     if (fgpid == 0) {
       printf("> ");

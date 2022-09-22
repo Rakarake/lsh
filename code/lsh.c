@@ -109,7 +109,6 @@ void RunCommand(int parse_result, Command *cmd) {
     return;
   }
 
-  // Before fork, make sure that if background process, don't recieve sigint
   int pid = fork();
   if (pid == 0) {
     // Child process (fork)

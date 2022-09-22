@@ -70,3 +70,83 @@ background process terminated: 14322
 // as well as before the output of wc, this is because there was a time
 // when there could be input when the chain of commands ran in the background.
 
+
+> cat < tmp.1 | wc > tmp.3
+
+> cat tmp.1 | wc
+      5      38     221
+
+> cat tmp.3
+      5      38     221
+// They should be the same, listing tmp.1 then piping that to wc which
+// outputs to tmp.3, the same but without putting it into tmp.3 should
+// give you the same thing
+
+
+> abf | wc
+lsh: command not found: abf
+
+> ls | abf
+lsh: command not found: abf
+
+
+// TODO add grep
+
+
+
+> cd ..
+
+> cd code | abf
+lsh: command not found: abf
+
+> ls
+code  docs  lab1-rakarake  lab1-rakarake.zip  prepare-submission.sh
+
+// The ls command did work.
+
+
+> cd
+// Takes me to my home directory.
+
+@> grep exit < tmp.1
+// The shell did not quit.
+
+
+>   exit
+// This quit the shell
+
+
+> grep exit | hej
+
+> grep cd | wc
+// Nothing appeared, had to Ctrl-C
+
+> exit
+// No zombies
+
+
+
+---- DOCUMENTATION ----
+The shell works by, reading from GNU readline, then using the 
+parse functions to generate the linked list of "programs" that are going
+to be piped together.
+
+The process chain can be run in the background (& symbol), the standard
+output and input can also be redirected (to files) with > and < respectively.
+
+In RunCommand (called when hitting enter after text is entered),
+the first "program" is forked. That program sets the relevant input/output
+streams (opens files if needed). Then this process enters the function:
+"process_pgm", where it is processed and makes the pipes to a
+child process if there are more elements in the linked list.
+
+If run in background, the parent
+sets the pgid to the pid of the child process, this is so that
+the child process does not react to SIGINT (Ctrl-C).
+
+SIGINT is captured, so lsh does not die.
+SIGCHLD is captured, so we can dtermine if it was a background process
+that terminated, or a child process: then we set fgpid (ForeGround PID)
+to 0 so that the main code can start reading user input again.
+Also a new prompt is printed if needed.
+

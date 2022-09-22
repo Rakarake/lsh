@@ -183,11 +183,6 @@ void process_pgm(Pgm *pgm) {
 void catch_sigint(int signum) {
   // Set function to handle signal again
   signal(SIGINT, catch_sigint);
-  printf("signum: %i\n", signum == SIGINT);
-  printf("\n> ");
-
-  // We do not need to send a sigint to the child process in the foregorund,
-  // we need to make sure it does not reach processes in the background!
 }
 
 
@@ -199,10 +194,15 @@ void catch_sigchld(int signum) {
   if (child_pid == fgpid) {
     fgpid = 0;
     // Foreground process
-    //printf("foreground process terminated: %i\n", child_pid);
+    // Do not create prompt, will happen when calling the read function
   } else {
     // Background process
     printf("background process terminated: %i\n", child_pid);
+    // If there is a prompt: write it out again
+    if (fgpid == 0) {
+      printf("> ");
+      fflush(stdout);
+    }
   }
 }
 

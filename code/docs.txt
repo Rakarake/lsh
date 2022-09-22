@@ -1,0 +1,69 @@
+-- lsh, the best shell --
+
+Commands and output:
+
+
+> date
+tor 22 sep 2022 19:49:14 CEST
+
+
+> hello
+lsh: command not found: hello
+// The output is printed to standard output.
+// The child process of hello exits immediately.
+
+> ls -al -p
+total 4
+drwxr-xr-x. 1 rakarake rakarake  10 22 sep 19.52 ./
+drwxr-xr-x. 1 rakarake rakarake 154 22 sep 19.48 ../
+-rw-r--r--. 1 rakarake rakarake  63 21 sep 15.51 noooo
+
+
+> ls -al > tmp.1
+
+> cat < tmp.1 > tmp.2
+
+> diff tmp.1 tmp.2
+
+// The output of diff here is empty, as it should be.
+
+> sleep 60 &
+
+> sleep 60 &
+
+> sleep 60
+background process terminated: 12455
+background process terminated: 12466
+
+>
+
+// It is possible to kill the background processes.
+// Ctrl-C only works on the forground process.
+// No zombies.
+
+
+> ls -al | wc -w
+47
+
+
+> ls -al | wc
+      6      47     277
+
+
+// I did this one in the source directory
+> ls | grep lsh | sort -r
+lsh.o
+lsh.c
+lsh
+
+// The prompt does appear after the command above
+
+
+
+@> ls | wc &
+
+@>      10      10      73
+background process terminated: 13642
+// The prompt does not appear again, 
+
+

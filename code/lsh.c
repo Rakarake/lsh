@@ -97,7 +97,10 @@ void RunCommand(int parse_result, Command *cmd) {
   if ((!strcmp(pname, "exit")) || (!strcmp(pname, ":q"))) {
     exit(0);
   } else if (!strcmp(pname, "cd")) {
-    chdir(pargs[0]);
+    int err = chdir(pargs[0]);
+    if (err == -1) {
+      fprintf(stderr, "cd: no such file or directory: %s", pargs[0]);
+    }
     return;
   }
 

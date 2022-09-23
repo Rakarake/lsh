@@ -1,6 +1,7 @@
 typedef struct c
 {
   char **pgmlist;
+  int pid;
   struct c *next;
 } Pgm;
 

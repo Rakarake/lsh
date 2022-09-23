@@ -40,14 +40,14 @@ void DebugPrintCommand(int, Command *);
 void PrintPgm(Pgm *);
 void stripwhite(char *);
 
-void process_pgm();
 void printenv();
+void handle_process(Pgm *pgm, Command *cmd);
 void catch_sigint(int signum);
 void catch_sigchld(int signum);
 
 extern char **environ;
 
-int fgpid = 0;
+Command *current_cmd;
 
 
 int main(void)
@@ -87,9 +87,8 @@ int main(void)
 }
 
 
-// Execute the given command(s).
 void RunCommand(int parse_result, Command *cmd) {
-  //DebugPrintCommand(parse_result, cmd);
+  current_cmd = cmd;
 
   // Shell commands (exit, cd)
   char *pname = cmd->pgm->pgmlist[0];
@@ -109,79 +108,116 @@ void RunCommand(int parse_result, Command *cmd) {
     return;
   }
 
-  int pid = fork();
-  if (pid == 0) {
-    // Child process (fork)
-    // Handle input/output file redirection
-    if (cmd->rstdout != NULL) {
-      // Create new file and connect stdout
-      int fd = open(cmd->rstdout, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-      if (fd == -1) {
-        printf("could not open file: %s\n", cmd->rstdout);
-      } else {
-        dup2(fd, 1);
-      }
+  // If there is only one argument in the linked list
+  if (cmd->pgm->next == NULL) {
+    int pid = fork();
+    if (pid == -1) {
+      fprintf(stderr, "fork failed!\n");
+      exit(1);
     }
-    if (cmd->rstdin != NULL) {
-      // Create new file and connect stdin
-      int fd = open(cmd->rstdin, O_RDONLY, O_RDWR);
-      if (fd == -1) {
-        printf("could not read file: %s\n", cmd->rstdin);
-      } else {
-        dup2(fd, 0);
-      }
-    }
-    process_pgm(cmd->pgm);
-  } else {
-    // Parent process (shell)
-    if (cmd->background) {
-      //printf("you are free my process!");
-      // Set group pid of background process to something elses so it does not
-      // react to SIGINT
-      setpgid(pid, pid);
+    if (pid == 0) {
+      handle_process(cmd->pgm, cmd);
     } else {
-      fgpid = pid;
-      // Wait until fgpid has been resolved by singal hanlder
-      while (fgpid != 0) {
-        pause();
+      // Add pid to linked list
+      cmd->pgm->pid = pid;
+    }
+  } else {
+    Pgm *p1 = cmd->pgm;
+    Pgm *p2;
+    while (p1->next != NULL) {
+      int pipe_fd[2];
+      if (pipe(pipe_fd) == -1) {
+        fprintf(stderr, "pipe failed!\n");
+        exit(1);
       }
-      fgpid = 0;
+
+      p2 = p1->next;
+      int pid1 = fork();
+      if (pid1 == -1) {
+        fprintf(stderr, "pipe-fork failed!\n");
+        exit(1);
+      }
+      if (pid1 == 0) {
+        // Child1 (reading end)
+        close(pipe_fd[WRITE_END]);
+        dup2(pipe_fd[READ_END], 0);
+        handle_process(p1, cmd);
+      } else {
+        // Add child1 pid to linked list
+        p1->pid = pid1;
+
+        int pid2 = fork();
+        if (pid2 == -1) {
+          fprintf(stderr, "pipe-fork failed!\n");
+          exit(1);
+        }
+        if (pid2 == 0) {
+          // Child2 (writing end)
+          close(pipe_fd[READ_END]);
+          dup2(pipe_fd[WRITE_END], 1);
+          handle_process(p2, cmd);
+        } else {
+          // Add child2 pid to linked list
+          p2->pid = pid2;
+        }
+      }
+      
+      p1 = p2;
+    }
+  }
+
+  // Shell: pause until all pid:s (foreground processes) are resolved
+  while (1) {
+    int every_pid_resolved = 1;
+    Pgm *p = cmd->pgm;
+    while (p != NULL) {
+      if (p->pid != 0) {
+        every_pid_resolved = 0;
+        break;
+      }
+      p = p->next;
+    }
+    if (!every_pid_resolved) {
+      pause();
+    } else {
+      break;
     }
   }
 }
 
-// Recursive function to hanlde processes
-void process_pgm(Pgm *pgm) {
-  char *pname =       pgm->pgmlist[0];
-  char **pname_args = pgm->pgmlist;
+void handle_process(Pgm *pgm, Command *cmd) {
+  // Background process
+  // Sets the group id to itself; since it does not have the same as the shell,
+  // it does not recieve sigals such as SIGINT anymore
+  if (cmd->background) {
+    setpgid(getpid(), getpid());
+  }
 
-  if (pgm->next != NULL) {
-    // Create pipe, then fork
-    int pipe_fd[2];
-
-    if (pipe(pipe_fd) == -1) {
-      fprintf(stderr, "pipe failed!\n");
-      exit(1);
-    }
-
-    int ppid = fork();
-    if (ppid == -1) {
-      fprintf(stderr, "pipe-fork failed!\n");
-      exit(1);
-    }
-
-    if (ppid == 0) {
-      close(pipe_fd[READ_END]);     // The end who wants to write (the child)
-      dup2(pipe_fd[WRITE_END], 1);  // Set the output stream to the pipe write end
-      process_pgm(pgm->next);
+  // Output redirection
+  if (pgm == cmd->pgm && cmd->rstdout != NULL) {
+    // Create new file and connect stdout
+    int fd = open(cmd->rstdout, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd == -1) {
+      fprintf(stderr, "could not open file: %s\n", cmd->rstdout);
     } else {
-      close(pipe_fd[WRITE_END]);  // The end who wants to read (the parent)
-      dup2(pipe_fd[READ_END], 0); // Set the input stream to the pipe read end
+      dup2(fd, 1);
     }
   }
-  // Parent (maybe without child)
-  execvp(pname, pname_args);
-  fprintf(stderr, "lsh: command not found: %s\n", pname);
+
+  // Input redirection
+  if (pgm->next == NULL && cmd->rstdin) {
+    // Create new file and connect stdin
+    int fd = open(cmd->rstdin, O_RDONLY, O_RDWR);
+    if (fd == -1) {
+      fprintf(stderr, "could not read file: %s\n", cmd->rstdin);
+    } else {
+      dup2(fd, 0);
+    }
+  }
+
+  // Execute program or terminate
+  execvp(pgm->pgmlist[0], pgm->pgmlist);
+  fprintf(stderr, "lsh: command not found: %s\n", pgm->pgmlist[0]);
   exit(1);
 }
 
@@ -195,23 +231,143 @@ void catch_sigint(int signum) {
 
 // CHILD (when child terminates and other things)
 void catch_sigchld(int signum) {
-  // Wait will fail if foreground process, since we have already waited
+  // Clean up terminated process by waiting
   int child_pid = waitpid(-1, NULL, WNOHANG);
-  // Return of wait is equal to current_pid
-  if (child_pid == fgpid) {
-    fgpid = 0;
-    // Foreground process
-    // Do not create prompt, will happen when calling the read function
-  } else {
-    // Background process
-    fprintf(stderr, "background process terminated: %i\n", child_pid);
-    // If there is a prompt: write it out again
-    if (fgpid == 0) {
-      printf("> ");
-      fflush(stdout);
+
+  // Go through the linked list and see if it is a foreground process
+  int is_fg_process = 0;
+  Pgm *p = current_cmd->pgm;
+  while (p != NULL) {
+    if (child_pid == p->pid) {
+      is_fg_process = 1;
+      // Resolve this pid
+      p->pid = 0;
+      break;
     }
+    p = p->next;
   }
+
+  if (is_fg_process) {
+  } else {
+    fprintf(stderr, "background process terminated: %i\n", child_pid);
+  }
+
+  //// Wait will fail if foreground process, since we have already waited
+  //int child_pid = waitpid(-1, NULL, WNOHANG);
+  //// Return of wait is equal to current_pid
+  //if (child_pid == fgpid) {
+  //  fgpid = 0;
+  //  // Foreground process
+  //  // Do not create prompt, will happen when calling the read function
+  //} else {
+  //  // Background process
+  //  fprintf(stderr, "background process terminated: %i\n", child_pid);
+  //  // If there is a prompt: write it out again
+  //  if (fgpid == 0) {
+  //    printf("> ");
+  //    fflush(stdout);
+  //  }
+  //}
 }
+
+
+//// Execute the given command(s).
+//void RunCommand(int parse_result, Command *cmd) {
+//  //DebugPrintCommand(parse_result, cmd);
+//
+//  // Shell commands (exit, cd)
+//  char *pname = cmd->pgm->pgmlist[0];
+//  char **pargs = cmd->pgm->pgmlist + 1;
+//  if ((!strcmp(pname, "exit")) || (!strcmp(pname, ":q"))) {
+//    exit(0);
+//  } else if (!strcmp(pname, "cd")) {
+//    int err;
+//    if (pargs[0] == NULL) {
+//      err = chdir(getenv("HOME"));
+//    } else {
+//      err = chdir(pargs[0]);
+//    }
+//    if (err == -1) {
+//      fprintf(stderr, "cd: no such file or directory: %s", pargs[0]);
+//    }
+//    return;
+//  }
+//
+//  int pid = fork();
+//  if (pid == 0) {
+//    // Child process (fork)
+//    // Handle input/output file redirection
+//    if (cmd->rstdout != NULL) {
+//      // Create new file and connect stdout
+//      int fd = open(cmd->rstdout, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+//      if (fd == -1) {
+//        printf("could not open file: %s\n", cmd->rstdout);
+//      } else {
+//        dup2(fd, 1);
+//      }
+//    }
+//    if (cmd->rstdin != NULL) {
+//      // Create new file and connect stdin
+//      int fd = open(cmd->rstdin, O_RDONLY, O_RDWR);
+//      if (fd == -1) {
+//        printf("could not read file: %s\n", cmd->rstdin);
+//      } else {
+//        dup2(fd, 0);
+//      }
+//    }
+//    process_pgm(cmd->pgm);
+//  } else {
+//    // Parent process (shell)
+//    if (cmd->background) {
+//      //printf("you are free my process!");
+//      // Set group pid of background process to something elses so it does not
+//      // react to SIGINT
+//      setpgid(pid, pid);
+//    } else {
+//      fgpid = pid;
+//      // Wait until fgpid has been resolved by singal hanlder
+//      while (fgpid != 0) {
+//        pause();
+//      }
+//      fgpid = 0;
+//    }
+//  }
+//}
+//
+//// Recursive function to hanlde processes
+//void process_pgm(Pgm *pgm) {
+//  char *pname =       pgm->pgmlist[0];
+//  char **pname_args = pgm->pgmlist;
+//
+//  if (pgm->next != NULL) {
+//    // Create pipe, then fork
+//    int pipe_fd[2];
+//
+//    if (pipe(pipe_fd) == -1) {
+//      fprintf(stderr, "pipe failed!\n");
+//      exit(1);
+//    }
+//
+//    int ppid = fork();
+//    if (ppid == -1) {
+//      fprintf(stderr, "pipe-fork failed!\n");
+//      exit(1);
+//    }
+//
+//    if (ppid == 0) {
+//      close(pipe_fd[READ_END]);     // The end who wants to write (the child)
+//      dup2(pipe_fd[WRITE_END], 1);  // Set the output stream to the pipe write end
+//      process_pgm(pgm->next);
+//    } else {
+//      close(pipe_fd[WRITE_END]);  // The end who wants to read (the parent)
+//      dup2(pipe_fd[READ_END], 0); // Set the input stream to the pipe read end
+//    }
+//  }
+//  // Parent (maybe without child)
+//  execvp(pname, pname_args);
+//  fprintf(stderr, "lsh: command not found: %s\n", pname);
+//  exit(1);
+//}
 
 /* 
  * Print a Comcand structure as returned by parse on stdout. 

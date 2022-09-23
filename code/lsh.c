@@ -119,12 +119,12 @@ void RunCommand(int parse_result, Command *cmd) {
   while (p != NULL) {
     // Switch read and write pipes if needed
     if (in_fd[0] != 0 || in_fd[1] != 0) {
-      printf("WKEJKLJELKEJLKEJLEKJE\n");
       out_fd[READ_END] = in_fd[READ_END];
       out_fd[WRITE_END] = in_fd[WRITE_END];
       // Reset in
       in_fd[READ_END] = 0;
       in_fd[WRITE_END] = 0;
+      printf("switching read and write: %i and %i\n", out_fd[0], out_fd[1]);
     }
     // Open read pipe if not the end
     if (p->next != NULL) {
@@ -132,24 +132,26 @@ void RunCommand(int parse_result, Command *cmd) {
         fprintf(stderr, "pipe failed!\n");
         exit(1);
       }
+      printf("opening new read pipe: %i and %i\n", in_fd[0], in_fd[1]);
     }
     // Start fork
     int pid = fork();
     if (pid == 0) {
       // Child process
       if (in_fd[READ_END] != 0 || in_fd[WRITE_END] != 0) {
-        printf("big in\n");
+        printf("child process connects to read end of: %i and %i\n", in_fd[0], in_fd[1]);
         close(in_fd[WRITE_END]);
         dup2(in_fd[READ_END], 0);
       }
       if (out_fd[READ_END] != 0 || out_fd[WRITE_END] != 0) {
-        printf("big out\n");
+        printf("child process connects to write end of: %i and %i\n", out_fd[0], out_fd[1]);
         close(out_fd[READ_END]);
         dup2(out_fd[WRITE_END], 1);
       }
       handle_process(p, cmd);
     } else {
       // Parent process
+      printf("pid catched by parent after fork: %i\n", pid);
       if (!cmd->background) { p->pid = pid; }  // Remember foreground process
       p = p->next;
     }
@@ -310,7 +312,7 @@ void catch_sigchld(int signum) {
   }
 
   if (is_fg_process) {
-    printf("fgprocess????\n");
+    printf("foreground process terminated: %i\n", child_pid);
   } else {
     fprintf(stderr, "background process terminated: %i\n", child_pid);
     if (!there_are_fg_processes) {

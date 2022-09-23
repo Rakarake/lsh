@@ -42,6 +42,7 @@ void stripwhite(char *);
 
 void printenv();
 void handle_process(Pgm *pgm, Command *cmd);
+int fork_failed(int pid);
 void catch_sigint(int signum);
 void catch_sigchld(int signum);
 
@@ -108,61 +109,49 @@ void RunCommand(int parse_result, Command *cmd) {
     return;
   }
 
-  // If there is only one argument in the linked list
-  if (cmd->pgm->next == NULL) {
-    int pid = fork();
-    if (pid == -1) {
-      fprintf(stderr, "fork failed!\n");
-      exit(1);
+  // New implementation
+  // Two pipes, one for input of a process, one for output
+  // TODO: make loop die at last
+  int in_fd[2] = {0,0};
+  int out_fd[2] = {0,0};
+  Pgm *p = cmd->pgm;
+
+  while (p != NULL) {
+    // Switch read and write pipes if needed
+    if (in_fd[0] != 0 || in_fd[1] != 0) {
+      printf("WKEJKLJELKEJLKEJLEKJE\n");
+      out_fd[READ_END] = in_fd[READ_END];
+      out_fd[WRITE_END] = in_fd[WRITE_END];
+      // Reset in
+      in_fd[READ_END] = 0;
+      in_fd[WRITE_END] = 0;
     }
-    if (pid == 0) {
-      handle_process(cmd->pgm, cmd);
-    } else {
-      // Add pid to linked list
-      cmd->pgm->pid = pid;
-    }
-  } else {
-    Pgm *p1 = cmd->pgm;
-    Pgm *p2;
-    while (p1->next != NULL) {
-      int pipe_fd[2];
-      if (pipe(pipe_fd) == -1) {
+    // Open read pipe if not the end
+    if (p->next != NULL) {
+      if (pipe(in_fd) == -1) {
         fprintf(stderr, "pipe failed!\n");
         exit(1);
       }
-
-      p2 = p1->next;
-      int pid1 = fork();
-      if (pid1 == -1) {
-        fprintf(stderr, "pipe-fork failed!\n");
-        exit(1);
+    }
+    // Start fork
+    int pid = fork();
+    if (pid == 0) {
+      // Child process
+      if (in_fd[READ_END] != 0 || in_fd[WRITE_END] != 0) {
+        printf("big in\n");
+        close(in_fd[WRITE_END]);
+        dup2(in_fd[READ_END], 0);
       }
-      if (pid1 == 0) {
-        // Child1 (reading end)
-        close(pipe_fd[WRITE_END]);
-        dup2(pipe_fd[READ_END], 0);
-        handle_process(p1, cmd);
-      } else {
-        // Add child1 pid to linked list
-        p1->pid = pid1;
-
-        int pid2 = fork();
-        if (pid2 == -1) {
-          fprintf(stderr, "pipe-fork failed!\n");
-          exit(1);
-        }
-        if (pid2 == 0) {
-          // Child2 (writing end)
-          close(pipe_fd[READ_END]);
-          dup2(pipe_fd[WRITE_END], 1);
-          handle_process(p2, cmd);
-        } else {
-          // Add child2 pid to linked list
-          p2->pid = pid2;
-        }
+      if (out_fd[READ_END] != 0 || out_fd[WRITE_END] != 0) {
+        printf("big out\n");
+        close(out_fd[READ_END]);
+        dup2(out_fd[WRITE_END], 1);
       }
-      
-      p1 = p2;
+      handle_process(p, cmd);
+    } else {
+      // Parent process
+      if (!cmd->background) { p->pid = pid; }  // Remember foreground process
+      p = p->next;
     }
   }
 
@@ -183,6 +172,75 @@ void RunCommand(int parse_result, Command *cmd) {
       break;
     }
   }
+
+
+
+  //// If there is only one argument in the linked list
+  //if (cmd->pgm->next == NULL) {
+  //  int pid = fork();
+  //  if (fork_failed(pid)) { exit(1); }
+  //  if (pid == 0) {
+  //    handle_process(cmd->pgm, cmd);
+  //  } else {
+  //    // Add pid to linked list
+  //    if (!cmd->background) { cmd->pgm->pid = pid; }
+  //  }
+  //} else {
+  //  Pgm *p1 = cmd->pgm;
+  //  Pgm *p2;
+  //  while (p1->next != NULL) {
+  //    int pipe_fd[2];
+  //    if (pipe(pipe_fd) == -1) {
+  //      fprintf(stderr, "pipe failed!\n");
+  //      exit(1);
+  //    }
+
+  //    p2 = p1->next;
+  //    int pid1 = fork();
+  //    if (fork_failed(pid1)) { exit(1); }
+  //    if (pid1 == 0) {
+  //      // Child1 (reading end)
+  //      close(pipe_fd[WRITE_END]);
+  //      dup2(pipe_fd[READ_END], 0);
+  //      handle_process(p1, cmd);
+  //    } else {
+  //      // Add child1 pid to linked list
+  //      if (!cmd->background) { p1->pid = pid1; }
+
+  //      int pid2 = fork();
+  //      if (fork_failed(pid1)) { exit(1); }
+  //      if (pid2 == 0) {
+  //        // Child2 (writing end)
+  //        close(pipe_fd[READ_END]);
+  //        dup2(pipe_fd[WRITE_END], 1);
+  //        handle_process(p2, cmd);
+  //      } else {
+  //        // Add child2 pid to linked list
+  //        if (!cmd->background) { p2->pid = pid2; }
+  //      }
+  //    }
+  //    
+  //    p1 = p2;
+  //  }
+  //}
+
+  //// Shell: pause until all pid:s (foreground processes) are resolved
+  //while (1) {
+  //  int every_pid_resolved = 1;
+  //  Pgm *p = cmd->pgm;
+  //  while (p != NULL) {
+  //    if (p->pid != 0) {
+  //      every_pid_resolved = 0;
+  //      break;
+  //    }
+  //    p = p->next;
+  //  }
+  //  if (!every_pid_resolved) {
+  //    pause();
+  //  } else {
+  //    break;
+  //  }
+  //}
 }
 
 void handle_process(Pgm *pgm, Command *cmd) {
@@ -236,8 +294,12 @@ void catch_sigchld(int signum) {
 
   // Go through the linked list and see if it is a foreground process
   int is_fg_process = 0;
+  int there_are_fg_processes = 0;
   Pgm *p = current_cmd->pgm;
   while (p != NULL) {
+    if (p->pid != 0) {
+      there_are_fg_processes = 1;
+    }
     if (child_pid == p->pid) {
       is_fg_process = 1;
       // Resolve this pid
@@ -248,28 +310,23 @@ void catch_sigchld(int signum) {
   }
 
   if (is_fg_process) {
+    printf("fgprocess????\n");
   } else {
     fprintf(stderr, "background process terminated: %i\n", child_pid);
+    if (!there_are_fg_processes) {
+      printf("> ");
+      fflush(stdout);
+    }
   }
-
-  //// Wait will fail if foreground process, since we have already waited
-  //int child_pid = waitpid(-1, NULL, WNOHANG);
-  //// Return of wait is equal to current_pid
-  //if (child_pid == fgpid) {
-  //  fgpid = 0;
-  //  // Foreground process
-  //  // Do not create prompt, will happen when calling the read function
-  //} else {
-  //  // Background process
-  //  fprintf(stderr, "background process terminated: %i\n", child_pid);
-  //  // If there is a prompt: write it out again
-  //  if (fgpid == 0) {
-  //    printf("> ");
-  //    fflush(stdout);
-  //  }
-  //}
 }
 
+int fork_failed(int pid) {
+  if (pid == -1) {
+    fprintf(stderr, "fork failed!\n");
+    return 1;
+  }
+  return 0;
+}
 
 //// Execute the given command(s).
 //void RunCommand(int parse_result, Command *cmd) {

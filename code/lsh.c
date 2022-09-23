@@ -48,7 +48,7 @@ void catch_sigchld(int signum);
 
 extern char **environ;
 
-Command *current_cmd;
+Command *current_cmd = NULL;
 
 
 int main(void)
@@ -64,6 +64,7 @@ int main(void)
   {
     printf("\n");
     char *line;
+    printf("Pulling up prompt\n");
     line = readline("> ");
 
     /* If EOF encountered, exit shell */
@@ -90,6 +91,10 @@ int main(void)
 
 
 void RunCommand(int parse_result, Command *cmd) {
+  if (parse_result == -1) {
+    fprintf(stderr, "syntax error!\n");
+    return;
+  }
   current_cmd = cmd;
 
   // Shell commands (exit, cd)
@@ -156,7 +161,6 @@ void RunCommand(int parse_result, Command *cmd) {
           //printf("error on writ ething wowowowowowo\n");
           fprintf(stderr, "pipe write end dup2 failed for process %i\n", pid);
         }
-        printf("UMEMEMEMMALKJALKJSLKJDALKJDSLAJSDADSLAKSDJ\n");
       }
       handle_process(p, cmd);
     } else {
@@ -257,7 +261,7 @@ void catch_sigchld(int signum) {
   }
 
   if (is_fg_process) {
-    //printf("foreground process terminated: %i\n", child_pid);
+    printf("foreground process terminated: %i\n", child_pid);
   } else {
     fprintf(stderr, "background process terminated: %i\n", child_pid);
     if (!there_are_fg_processes) {

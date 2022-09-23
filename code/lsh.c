@@ -69,6 +69,7 @@ int main(void)
     /* If EOF encountered, exit shell */
     if (!line)
     {
+      printf("EOF encountered in shell!\n");
       break;
     }
     /* Remove leading and trailing whitespace from the line */
@@ -111,7 +112,6 @@ void RunCommand(int parse_result, Command *cmd) {
 
   // New implementation
   // Two pipes, one for input of a process, one for output
-  // TODO: make loop die at last
   int in_fd[2] = {0,0};
   int out_fd[2] = {0,0};
   Pgm *p = cmd->pgm;
@@ -119,8 +119,8 @@ void RunCommand(int parse_result, Command *cmd) {
   while (p != NULL) {
     // Switch read and write pipes if needed
     if (in_fd[0] != 0 || in_fd[1] != 0) {
-      out_fd[READ_END] = dup(in_fd[READ_END]);
-      out_fd[WRITE_END] = dup(in_fd[WRITE_END]);
+      out_fd[READ_END] = in_fd[READ_END];
+      out_fd[WRITE_END] = in_fd[WRITE_END];
       // Reset in
       in_fd[READ_END] = 0;
       in_fd[WRITE_END] = 0;
@@ -136,24 +136,35 @@ void RunCommand(int parse_result, Command *cmd) {
     }
     // Start fork
     int pid = fork();
+    if (fork_failed(pid)) { exit(1); }
     if (pid == 0) {
       // Child process, can connect to both read and write end (if there are more than one pipd)
       if (in_fd[READ_END] != 0 || in_fd[WRITE_END] != 0) {
         // Read end
         printf("child process %i connects to read end of: %i and %i\n", getpid(), in_fd[0], in_fd[1]);
         close(in_fd[WRITE_END]);
-        dup2(in_fd[READ_END], 0);
+        if (dup2(in_fd[READ_END], 0) == -1) {
+          fprintf(stderr, "pipe read end dup2 failed for process %i\n", pid);
+        }
       }
       if (out_fd[READ_END] != 0 || out_fd[WRITE_END] != 0) {
         // Write end
         printf("child process %i connects to write end of: %i and %i\n", getpid(), out_fd[0], out_fd[1]);
         close(out_fd[READ_END]);
-        dup2(out_fd[WRITE_END], 1);
+        printf("ABOUT TO ENTER DUP2 write\n");
+        if (dup2(out_fd[WRITE_END], 1) == -1) {
+          printf("error on writ ething wowowowowowo\n");
+          fprintf(stderr, "pipe write end dup2 failed for process %i\n", pid);
+        }
+        printf("UMEMEMEMMALKJALKJSLKJDALKJDSLAJSDADSLAKSDJ\n");
       }
       handle_process(p, cmd);
     } else {
       // Parent process
       printf("pid catched by parent after fork: %i\n", pid);
+      // Close parent's copies of file handlers
+      close(out_fd[READ_END]);
+      close(out_fd[WRITE_END]);
       if (!cmd->background) { p->pid = pid; }  // Remember foreground process
       p = p->next;
     }
@@ -176,75 +187,8 @@ void RunCommand(int parse_result, Command *cmd) {
       break;
     }
   }
+  printf("SUPER WOW\n");
 
-
-
-  //// If there is only one argument in the linked list
-  //if (cmd->pgm->next == NULL) {
-  //  int pid = fork();
-  //  if (fork_failed(pid)) { exit(1); }
-  //  if (pid == 0) {
-  //    handle_process(cmd->pgm, cmd);
-  //  } else {
-  //    // Add pid to linked list
-  //    if (!cmd->background) { cmd->pgm->pid = pid; }
-  //  }
-  //} else {
-  //  Pgm *p1 = cmd->pgm;
-  //  Pgm *p2;
-  //  while (p1->next != NULL) {
-  //    int pipe_fd[2];
-  //    if (pipe(pipe_fd) == -1) {
-  //      fprintf(stderr, "pipe failed!\n");
-  //      exit(1);
-  //    }
-
-  //    p2 = p1->next;
-  //    int pid1 = fork();
-  //    if (fork_failed(pid1)) { exit(1); }
-  //    if (pid1 == 0) {
-  //      // Child1 (reading end)
-  //      close(pipe_fd[WRITE_END]);
-  //      dup2(pipe_fd[READ_END], 0);
-  //      handle_process(p1, cmd);
-  //    } else {
-  //      // Add child1 pid to linked list
-  //      if (!cmd->background) { p1->pid = pid1; }
-
-  //      int pid2 = fork();
-  //      if (fork_failed(pid1)) { exit(1); }
-  //      if (pid2 == 0) {
-  //        // Child2 (writing end)
-  //        close(pipe_fd[READ_END]);
-  //        dup2(pipe_fd[WRITE_END], 1);
-  //        handle_process(p2, cmd);
-  //      } else {
-  //        // Add child2 pid to linked list
-  //        if (!cmd->background) { p2->pid = pid2; }
-  //      }
-  //    }
-  //    
-  //    p1 = p2;
-  //  }
-  //}
-
-  //// Shell: pause until all pid:s (foreground processes) are resolved
-  //while (1) {
-  //  int every_pid_resolved = 1;
-  //  Pgm *p = cmd->pgm;
-  //  while (p != NULL) {
-  //    if (p->pid != 0) {
-  //      every_pid_resolved = 0;
-  //      break;
-  //    }
-  //    p = p->next;
-  //  }
-  //  if (!every_pid_resolved) {
-  //    pause();
-  //  } else {
-  //    break;
-  //  }
-  //}
 }
 
 void handle_process(Pgm *pgm, Command *cmd) {

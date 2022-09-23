@@ -1,1 +1,1 @@
-make && ./lsh
+make clean && make && ./lsh

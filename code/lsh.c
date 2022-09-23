@@ -124,7 +124,7 @@ void RunCommand(int parse_result, Command *cmd) {
       // Reset in
       in_fd[READ_END] = 0;
       in_fd[WRITE_END] = 0;
-      printf("switching read and write: %i and %i\n", out_fd[0], out_fd[1]);
+      //printf("switching read and write: %i and %i\n", out_fd[0], out_fd[1]);
     }
     // Open read pipe if not the end
     if (p->next != NULL) {
@@ -132,7 +132,7 @@ void RunCommand(int parse_result, Command *cmd) {
         fprintf(stderr, "pipe failed!\n");
         exit(1);
       }
-      printf("opening new read pipe: %i and %i\n", in_fd[0], in_fd[1]);
+      //printf("opening new read pipe: %i and %i\n", in_fd[0], in_fd[1]);
     }
     // Start fork
     int pid = fork();
@@ -141,7 +141,7 @@ void RunCommand(int parse_result, Command *cmd) {
       // Child process, can connect to both read and write end (if there are more than one pipd)
       if (in_fd[READ_END] != 0 || in_fd[WRITE_END] != 0) {
         // Read end
-        printf("child process %i connects to read end of: %i and %i\n", getpid(), in_fd[0], in_fd[1]);
+        //printf("child process %i connects to read end of: %i and %i\n", getpid(), in_fd[0], in_fd[1]);
         close(in_fd[WRITE_END]);
         if (dup2(in_fd[READ_END], 0) == -1) {
           fprintf(stderr, "pipe read end dup2 failed for process %i\n", pid);
@@ -149,11 +149,11 @@ void RunCommand(int parse_result, Command *cmd) {
       }
       if (out_fd[READ_END] != 0 || out_fd[WRITE_END] != 0) {
         // Write end
-        printf("child process %i connects to write end of: %i and %i\n", getpid(), out_fd[0], out_fd[1]);
+        //printf("child process %i connects to write end of: %i and %i\n", getpid(), out_fd[0], out_fd[1]);
         close(out_fd[READ_END]);
-        printf("ABOUT TO ENTER DUP2 write\n");
+        //printf("ABOUT TO ENTER DUP2 write\n");
         if (dup2(out_fd[WRITE_END], 1) == -1) {
-          printf("error on writ ething wowowowowowo\n");
+          //printf("error on writ ething wowowowowowo\n");
           fprintf(stderr, "pipe write end dup2 failed for process %i\n", pid);
         }
         printf("UMEMEMEMMALKJALKJSLKJDALKJDSLAJSDADSLAKSDJ\n");
@@ -161,7 +161,7 @@ void RunCommand(int parse_result, Command *cmd) {
       handle_process(p, cmd);
     } else {
       // Parent process
-      printf("pid catched by parent after fork: %i\n", pid);
+      //printf("pid catched by parent after fork: %i\n", pid);
       // Close parent's copies of file handlers
       close(out_fd[READ_END]);
       close(out_fd[WRITE_END]);
@@ -187,8 +187,7 @@ void RunCommand(int parse_result, Command *cmd) {
       break;
     }
   }
-  printf("SUPER WOW\n");
-
+  //printf("shell about to process next command, or return to readline\n");
 }
 
 void handle_process(Pgm *pgm, Command *cmd) {
@@ -258,7 +257,7 @@ void catch_sigchld(int signum) {
   }
 
   if (is_fg_process) {
-    printf("foreground process terminated: %i\n", child_pid);
+    //printf("foreground process terminated: %i\n", child_pid);
   } else {
     fprintf(stderr, "background process terminated: %i\n", child_pid);
     if (!there_are_fg_processes) {

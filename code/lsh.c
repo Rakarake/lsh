@@ -119,8 +119,8 @@ void RunCommand(int parse_result, Command *cmd) {
   while (p != NULL) {
     // Switch read and write pipes if needed
     if (in_fd[0] != 0 || in_fd[1] != 0) {
-      out_fd[READ_END] = in_fd[READ_END];
-      out_fd[WRITE_END] = in_fd[WRITE_END];
+      out_fd[READ_END] = dup(in_fd[READ_END]);
+      out_fd[WRITE_END] = dup(in_fd[WRITE_END]);
       // Reset in
       in_fd[READ_END] = 0;
       in_fd[WRITE_END] = 0;
@@ -137,14 +137,16 @@ void RunCommand(int parse_result, Command *cmd) {
     // Start fork
     int pid = fork();
     if (pid == 0) {
-      // Child process
+      // Child process, can connect to both read and write end (if there are more than one pipd)
       if (in_fd[READ_END] != 0 || in_fd[WRITE_END] != 0) {
-        printf("child process connects to read end of: %i and %i\n", in_fd[0], in_fd[1]);
+        // Read end
+        printf("child process %i connects to read end of: %i and %i\n", getpid(), in_fd[0], in_fd[1]);
         close(in_fd[WRITE_END]);
         dup2(in_fd[READ_END], 0);
       }
       if (out_fd[READ_END] != 0 || out_fd[WRITE_END] != 0) {
-        printf("child process connects to write end of: %i and %i\n", out_fd[0], out_fd[1]);
+        // Write end
+        printf("child process %i connects to write end of: %i and %i\n", getpid(), out_fd[0], out_fd[1]);
         close(out_fd[READ_END]);
         dup2(out_fd[WRITE_END], 1);
       }

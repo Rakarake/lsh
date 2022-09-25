@@ -1,0 +1,106 @@
+@> date
+sön 25 sep 2022 18:37:00 CEST
+
+@> hello
+lsh: command not found: hello
+
+@> ls -al -p
+total 124
+drwxr-xr-x 3 rakarake rakarake  4096 25 sep 18.36 ./
+drwxr-xr-x 5 rakarake rakarake  4096 25 sep 17.34 ../
+-rw-r--r-- 1 rakarake rakarake  3115 23 sep 23.51 docs.txt
+-rw-r--r-- 1 rakarake rakarake  6148 24 aug  2021 .DS_Store
+-rw-r--r-- 1 rakarake rakarake    55 19 sep 18.45 .exrc
+-rwxr-xr-x 1 rakarake rakarake 35864 25 sep 18.36 lsh
+-rw-r--r-- 1 rakarake rakarake  9449 25 sep 18.32 lsh.c
+-rw-r--r-- 1 rakarake rakarake 17936 25 sep 18.36 lsh.o
+-rw-r--r-- 1 rakarake rakarake   372 22 sep 19.25 Makefile
+-rw-rw-r-- 1 rakarake rakarake  3152  1 jun  2020 parse.c
+-rw-r--r-- 1 rakarake rakarake   354 24 sep 00.17 parse.h
+-rw-r--r-- 1 rakarake rakarake 11456 25 sep 18.36 parse.o
+-rwxr-xr-x 1 rakarake rakarake    28 23 sep 23.51 run.sh
+drwxr-xr-x 2 rakarake rakarake  4096 25 sep 16.30 testdir/
+
+@> ls -al > tmp.1
+
+@> cat < tmp.1 > tmp.2
+
+@> diff tmp.1 tmp.2
+
+@> sleep 60 &
+
+@> sleep 60 &
+
+@> sleep 60
+background process terminated: 26410
+background process terminated: 26411
+
+@> ls -al | wc -w
+146
+
+@> ls -al | wc
+     17     146     916
+
+@> ls | grep lsh | sort -r
+lsh.o
+lsh.c
+lsh
+
+@> ls | wc &
+
+@> background process terminated: 26490
+>      12      12      85
+background process terminated: 26489
+> cat < tmp.1 | wc > tmp.3
+
+@> cat tmp.1 | wc
+     16     137     860
+
+@> cat tmp.3
+     16     137     860
+
+@> abf | wc
+lsh: command not found: abf
+      0       0       0
+
+@> ls | abf
+lsh: command not found: abf
+
+@> grep apa | ls
+docs.txt  lsh  lsh.c  lsh.o  Makefile  parse.c	parse.h  parse.o  run.sh  testdir  tmp.1  tmp.2  tmp.3
+I am writing text here in the prompt apa!
+
+@> cd ..
+
+@> cd 
+.DS_Store              .gitignore             docs/                  prepare-submission.sh
+.git/                  code/                  docs.txt               
+@> cd code
+
+@> cd tmp.tmp
+cd: no such file or directory: tmp.tmp
+@> cd ..
+
+@> cd code | abf
+lsh: command not found: abf
+
+@> ls
+code  docs  docs.txt  prepare-submission.sh
+
+@> cd
+
+@> pwd
+/home/rakarake
+
+@> cd Projects/lsh/code
+
+@> grep exit < tmp.1
+
+@> ..exit
+lsh: command not found: ..exit
+
+@> grep exit | hej
+lsh: command not found: hej
+^C
+@> grep cd | wc
+^C

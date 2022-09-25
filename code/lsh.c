@@ -42,6 +42,7 @@ void stripwhite(char *);
 
 void printenv();
 void handle_process(Pgm *pgm, Command *cmd);
+int is_built_in_command(char **pgmlist);
 int fork_failed(int pid);
 void catch_sigint(int signum);
 void catch_sigchld(int signum);
@@ -95,29 +96,30 @@ void RunCommand(int parse_result, Command *cmd) {
   }
   current_cmd = cmd;
 
-  // Shell commands (exit, cd)
-  char *pname = cmd->pgm->pgmlist[0];
-  char **pargs = cmd->pgm->pgmlist + 1;
-  if ((!strcmp(pname, "exit")) || (!strcmp(pname, ":q"))) {
-    exit(0);
-  } else if (!strcmp(pname, "cd")) {
-    int err;
-    if (pargs[0] == NULL) {
-      err = chdir(getenv("HOME"));
-    } else {
-      err = chdir(pargs[0]);
-    }
-    if (err == -1) {
-      fprintf(stderr, "cd: no such file or directory: %s", pargs[0]);
-    }
-    return;
-  }
-
   // Two pipes, one for input of a process, one for output
   int in_fd[2] = {0,0};
   int out_fd[2] = {0,0};
   Pgm *p = cmd->pgm;
 
+  // Shell commands (exit, cd), only does something in isolation
+  if (p->next == NULL) {
+    if ((!strcmp(p->pgmlist[0], "exit")) || (!strcmp(p->pgmlist[0], ":q"))) {
+      exit(0);
+    } else if (!strcmp(p->pgmlist[0], "cd")) {
+      int err;
+      if (p->pgmlist[1] == NULL) {
+        err = chdir(getenv("HOME"));
+      } else {
+        err = chdir(p->pgmlist[1]);
+      }
+      if (err == -1) {
+        fprintf(stderr, "cd: no such file or directory: %s", p->pgmlist[1]);
+      }
+      return;
+    }
+  }
+
+  // Iterate and start all programs
   while (p != NULL) {
     // Switch read and write pipes if needed
     if (in_fd[0] != 0 || in_fd[1] != 0) {
@@ -160,6 +162,11 @@ void RunCommand(int parse_result, Command *cmd) {
           exit(1);
         }
         //fprintf(stderr, "IMPORTANT: at end of write-end of pipe: %i\n", getpid());
+      }
+
+      // Here the built in command is not allowed, just terminate
+      if (is_built_in_command(p->pgmlist)) {
+        exit(0);
       }
       handle_process(p, cmd);
     } else {
@@ -231,6 +238,9 @@ void handle_process(Pgm *pgm, Command *cmd) {
   exit(1);
 }
 
+int is_built_in_command(char **pgmlist) {
+  return (!strcmp(pgmlist[0], "exit")) || (!strcmp(pgmlist[0], ":q")) || (!strcmp(pgmlist[0], "cd"));
+}
 
 // INT (Ctrl-C)
 void catch_sigint(int signum) {
@@ -244,8 +254,8 @@ void catch_sigchld(int signum) {
   // Make sure to handle signal again
   signal(SIGCHLD, catch_sigchld);
   //fprintf(stderr, "inside << SIGCHLD >>\n");
-  // Clean up all terminated processes by waiting
 
+  // Clean up all terminated processes by waiting
   int child_pid;
   while ((child_pid = waitpid(-1, NULL, WNOHANG)) > 0) {
     // Go through the linked list and see if it is a foreground process

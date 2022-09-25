@@ -41,7 +41,7 @@ void PrintPgm(Pgm *);
 void stripwhite(char *);
 
 void printenv();
-void handle_process(Pgm *pgm, Command *cmd);
+void handle_process(Pgm *pgm, Command *cmd, int stdin_file_fd, int stdout_file_fd);
 int is_built_in_command(char **pgmlist);
 int fork_failed(int pid);
 void catch_sigint(int signum);
@@ -99,7 +99,31 @@ void RunCommand(int parse_result, Command *cmd) {
   // Two pipes, one for input of a process, one for output
   int in_fd[2] = {0,0};
   int out_fd[2] = {0,0};
+
   Pgm *p = cmd->pgm;
+
+  int stdin_file_fd = 0;
+  int stdout_file_fd = 0;
+
+  // Input redirection
+  if (cmd->rstdin) {
+    // Create new file descriptor and connect stdin
+    stdin_file_fd = open(cmd->rstdin, O_RDONLY, O_RDWR);
+    if (stdin_file_fd == -1) {
+      fprintf(stderr, "could not read file: %s\n", cmd->rstdin);
+      return;
+    }
+  }
+
+  // Output redirection
+  if (cmd->rstdout != NULL) {
+    // Create new file descriptor and connect stdout
+    stdout_file_fd = open(cmd->rstdout, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (stdout_file_fd == -1) {
+      fprintf(stderr, "could not open file: %s\n", cmd->rstdout);
+      return;
+    }
+  }
 
   // Shell commands (exit, cd), only does something in isolation
   if (p->next == NULL) {
@@ -168,7 +192,7 @@ void RunCommand(int parse_result, Command *cmd) {
       if (is_built_in_command(p->pgmlist)) {
         exit(0);
       }
-      handle_process(p, cmd);
+      handle_process(p, cmd, stdin_file_fd, stdout_file_fd);
     } else {
       // Parent process
       if (!cmd->background) { p->pid = pid; }  // Remember foreground process
@@ -202,7 +226,7 @@ void RunCommand(int parse_result, Command *cmd) {
   //printf("shell about to process next command, or return to readline\n");
 }
 
-void handle_process(Pgm *pgm, Command *cmd) {
+void handle_process(Pgm *pgm, Command *cmd, int stdin_file_fd, int stdout_file_fd) {
   // Background process
   // Sets the group id to itself; since it does not have the same as the shell,
   // it does not recieve sigals such as SIGINT anymore
@@ -210,26 +234,14 @@ void handle_process(Pgm *pgm, Command *cmd) {
     setpgid(getpid(), getpid());
   }
 
-  // Output redirection
-  if (pgm == cmd->pgm && cmd->rstdout != NULL) {
-    // Create new file and connect stdout
-    int fd = open(cmd->rstdout, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    if (fd == -1) {
-      //fprintf(stderr, "could not open file: %s\n", cmd->rstdout);
-    } else {
-      dup2(fd, 1);
-    }
+  // Input
+  if (stdin_file_fd != 0 && pgm->next == NULL) {
+    dup2(stdin_file_fd, 0);
   }
 
-  // Input redirection
-  if (pgm->next == NULL && cmd->rstdin) {
-    // Create new file and connect stdin
-    int fd = open(cmd->rstdin, O_RDONLY, O_RDWR);
-    if (fd == -1) {
-      //fprintf(stderr, "could not read file: %s\n", cmd->rstdin);
-    } else {
-      dup2(fd, 0);
-    }
+  // Output
+  if (stdout_file_fd != 0 && pgm == cmd->pgm) {
+    dup2(stdout_file_fd, 1);
   }
 
   // Execute program or terminate

@@ -11,15 +11,15 @@ to reach them. They also are not registered as foreground processes in the
 linked list (explained next).
 
 3. When a foreground process is launched, the shell (parent process) registers
-the PID of the child process alongside the parse information in the linked
-list of in-text command names and arguments parsed by parse function in main.
-NOTE: this means that there is an added parameter to the Pgm struct in parse.h.
-This is done, so that when a process is caught in the handler for SIGINT,
+the PID of the child process in a linked list.
+This is done, so that when a process is caught in the handler for SIGCHLD,
 the shell knows 1. if it was a foreground or background process 2. if
 all foreground processes have been terminated: in that case, start
 reading user input for the next command. If a background process exited,
 the shell prints that it happened, this would not be possible without
-remembering at least the foreground processes.
+remembering at least the foreground processes. Also if there are any running
+foreground processes, when the background process is catched no new prompt
+should be printed.
 
 4. Input/output redirection is firstly initiated early in the RunCommand
 function, it creates file handles with the open function if the strings rstdin and
@@ -43,6 +43,11 @@ with a signal handler.
 7. Ctrl-C not affecting background processes is described
 in 2.
 
+Other points. The linked list storing foreground PID:s is created by the parent
+process after the fork. Each individual element is freed when catching
+children exiting in the SIGCHLD handler. If an element is in between two other
+elements in the list, the "next" value of the previous element is changed
+to the next element of the current, typical linked list style.
 
  ---- All commands run, with names of directories changed (such as lab1 to code) ----
 > date
@@ -195,6 +200,4 @@ lsh: command not found: hej
 > exit
 
 // There are no zombies after exit.
-
-
 

@@ -35,6 +35,12 @@
 #define READ_END 0
 #define WRITE_END 1
 
+// Linked list struct for remembering PID:s
+typedef struct _pidlist {
+  int pid;
+  struct _pidlist *next;
+} Pidlist;
+
 void RunCommand(int, Command *);
 void DebugPrintCommand(int, Command *);
 void PrintPgm(Pgm *);
@@ -49,7 +55,7 @@ void catch_sigchld(int signum);
 
 extern char **environ;
 
-Command *current_cmd = NULL;
+Pidlist *current_pdl = NULL;
 
 
 int main(void)
@@ -88,19 +94,22 @@ int main(void)
   return 0;
 }
 
-
 void RunCommand(int parse_result, Command *cmd) {
   if (parse_result == -1) {
     fprintf(stderr, "syntax error!\n");
     return;
   }
-  current_cmd = cmd;
+  current_pdl = NULL;
 
   // Two pipes, one for input of a process, one for output
   int in_fd[2] = {0,0};
   int out_fd[2] = {0,0};
 
+  // Current pgm to process
   Pgm *p = cmd->pgm;
+
+  // Current element in pidlist
+  Pidlist *pdl_c = NULL;
 
   int stdin_file_fd = 0;
   int stdout_file_fd = 0;
@@ -195,7 +204,21 @@ void RunCommand(int parse_result, Command *cmd) {
       handle_process(p, cmd, stdin_file_fd, stdout_file_fd);
     } else {
       // Parent process
-      if (!cmd->background) { p->pid = pid; }  // Remember foreground process
+      
+      // Register foreground process
+      if (!cmd->background) {
+        if (current_pdl == NULL) {
+          current_pdl = (Pidlist*)malloc(sizeof(Pidlist));
+          pdl_c = current_pdl;
+          pdl_c->next = NULL;
+        } else {
+          pdl_c->next = (Pidlist*)malloc(sizeof(Pidlist));
+          pdl_c = pdl_c->next;
+          pdl_c->next = NULL;
+        }
+        pdl_c->pid = pid;
+      }
+      //if (!cmd->background) { p->pid = pid; }
       //fprintf(stderr, "pid catched by parent after fork: %i\n", pid);
       // Close parent's copies of file handlers
       if (out_fd[READ_END] != 0 || out_fd[WRITE_END] != 0) {
@@ -207,22 +230,7 @@ void RunCommand(int parse_result, Command *cmd) {
   }
 
   // Shell: pause until all pid:s (foreground processes) are resolved
-  while (1) {
-    int every_pid_resolved = 1;
-    Pgm *p = cmd->pgm;
-    while (p != NULL) {
-      if (p->pid != 0) {
-        every_pid_resolved = 0;
-        break;
-      }
-      p = p->next;
-    }
-    if (!every_pid_resolved) {
-      pause();
-    } else {
-      break;
-    }
-  }
+  while (current_pdl != NULL) pause();
   //printf("shell about to process next command, or return to readline\n");
 }
 
@@ -270,28 +278,35 @@ void catch_sigchld(int signum) {
   // Clean up all terminated processes by waiting
   int child_pid;
   while ((child_pid = waitpid(-1, NULL, WNOHANG)) > 0) {
-    // Go through the linked list and see if it is a foreground process
     int is_fg_process = 0;
-    int there_are_fg_processes = 0;
-    Pgm *p = current_cmd->pgm;
+    
+    // Detect if a foreground/background process, free nodes
+    Pidlist *p = current_pdl;
+    Pidlist *p_prev = NULL;
     while (p != NULL) {
-      if (p->pid != 0) {
-        there_are_fg_processes = 1;
-      }
-      if (child_pid == p->pid) {
+      if (p->pid == child_pid) {
         is_fg_process = 1;
-        // Resolve this pid
-        p->pid = 0;
+        // Resolve this pid by freeing the linked list element
+        if (p_prev != NULL) {
+          p_prev->next = p->next;  // Swap
+          free(p);
+        } else {
+          // Head of the linked list, set new head, or NULL if no processes left
+          current_pdl = p->next;
+          free(p);
+        }
         break;
       }
+      p_prev = p;
       p = p->next;
     }
 
     if (is_fg_process) {
-      //printf("foreground process terminated: %i\n", child_pid);
+      //fprintf(stderr, "foreground process terminated: %i\n", child_pid);
     } else {
       fprintf(stderr, "background process terminated: %i\n", child_pid);
-      if (!there_are_fg_processes) {
+      if (current_pdl == NULL) {
+        // There are no fg processes, bring up prompt again
         printf("> ");
         fflush(stdout);
       }

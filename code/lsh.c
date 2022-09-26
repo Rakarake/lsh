@@ -36,6 +36,7 @@
 #define WRITE_END 1
 
 // Linked list struct for remembering PID:s
+// Both the entry point (head) and individual nodes
 typedef struct _pidlist {
   int pid;
   struct _pidlist *next;
@@ -55,6 +56,7 @@ void catch_sigchld(int signum);
 
 extern char **environ;
 
+// PDL: PiD Linked list
 Pidlist *current_pdl = NULL;
 
 
@@ -93,6 +95,7 @@ int main(void)
   }
   return 0;
 }
+
 
 void RunCommand(int parse_result, Command *cmd) {
   if (parse_result == -1) {
@@ -134,9 +137,10 @@ void RunCommand(int parse_result, Command *cmd) {
     }
   }
 
-  // Shell commands (exit, cd), only does something in isolation
-  if (p->next == NULL) {
-    if ((!strcmp(p->pgmlist[0], "exit")) || (!strcmp(p->pgmlist[0], ":q"))) {
+  // Shell commands (exit, cd), only does something in isolation,
+  // if a cd, or exit is encountered later on, the process just exits
+  if (p->next == NULL && !cmd->background) {
+    if (!strcmp(p->pgmlist[0], "exit")) {
       exit(0);
     } else if (!strcmp(p->pgmlist[0], "cd")) {
       int err;
@@ -152,7 +156,7 @@ void RunCommand(int parse_result, Command *cmd) {
     }
   }
 
-  // Iterate and start all programs
+  // Iterate, fork all processes and conect their stdin/stdout with pipes
   while (p != NULL) {
     // Switch read and write pipes if needed
     if (in_fd[0] != 0 || in_fd[1] != 0) {
@@ -161,7 +165,6 @@ void RunCommand(int parse_result, Command *cmd) {
       // Reset in
       in_fd[READ_END] = 0;
       in_fd[WRITE_END] = 0;
-      //fprintf(stderr, "switching read and write: %i and %i\n", out_fd[0], out_fd[1]);
     }
     // Open read pipe if not the end
     if (p->next != NULL) {
@@ -169,7 +172,6 @@ void RunCommand(int parse_result, Command *cmd) {
         fprintf(stderr, "pipe failed!\n");
         exit(1);
       }
-      //fprintf(stderr, "opening new read pipe: %i and %i\n", in_fd[0], in_fd[1]);
     }
     // Start fork
     int pid = fork();
@@ -178,7 +180,6 @@ void RunCommand(int parse_result, Command *cmd) {
       // Child process, can connect to both read and write end (if there are more than one pipd)
       if (in_fd[READ_END] != 0 || in_fd[WRITE_END] != 0) {
         // Read end
-        //fprintf(stderr, "child process %i connects to read end of: %i and %i\n", getpid(), in_fd[0], in_fd[1]);
         close(in_fd[WRITE_END]);
         if (dup2(in_fd[READ_END], 0) == -1) {
           fprintf(stderr, "pipe read end dup2 failed for process %i\n", pid);
@@ -187,14 +188,11 @@ void RunCommand(int parse_result, Command *cmd) {
       }
       if (out_fd[READ_END] != 0 || out_fd[WRITE_END] != 0) {
         // Write end
-        //fprintf(stderr, "child process %i connects to write end of: %i and %i\n", getpid(), out_fd[0], out_fd[1]);
         close(out_fd[READ_END]);
-        //fprintf(stderr, "ABOUT TO ENTER DUP2 write\n");
         if (dup2(out_fd[WRITE_END], 1) == -1) {
           fprintf(stderr, "pipe write end dup2 failed for process %i\n", getpid());
           exit(1);
         }
-        //fprintf(stderr, "IMPORTANT: at end of write-end of pipe: %i\n", getpid());
       }
 
       // Here the built in command is not allowed, just terminate
@@ -219,7 +217,6 @@ void RunCommand(int parse_result, Command *cmd) {
         pdl_c->pid = pid;
       }
       //if (!cmd->background) { p->pid = pid; }
-      //fprintf(stderr, "pid catched by parent after fork: %i\n", pid);
       // Close parent's copies of file handlers
       if (out_fd[READ_END] != 0 || out_fd[WRITE_END] != 0) {
         close(out_fd[READ_END]);
@@ -231,9 +228,10 @@ void RunCommand(int parse_result, Command *cmd) {
 
   // Shell: pause until all pid:s (foreground processes) are resolved
   while (current_pdl != NULL) pause();
-  //printf("shell about to process next command, or return to readline\n");
 }
 
+
+// Here, child processes go to terminate
 void handle_process(Pgm *pgm, Command *cmd, int stdin_file_fd, int stdout_file_fd) {
   // Background process
   // Sets the group id to itself; since it does not have the same as the shell,
@@ -242,12 +240,12 @@ void handle_process(Pgm *pgm, Command *cmd, int stdin_file_fd, int stdout_file_f
     setpgid(getpid(), getpid());
   }
 
-  // Input
+  // Input redirection, only for the last command in the list
   if (stdin_file_fd != 0 && pgm->next == NULL) {
     dup2(stdin_file_fd, 0);
   }
 
-  // Output
+  // Output redirection, only for the first command in the list
   if (stdout_file_fd != 0 && pgm == cmd->pgm) {
     dup2(stdout_file_fd, 1);
   }
@@ -258,9 +256,12 @@ void handle_process(Pgm *pgm, Command *cmd, int stdin_file_fd, int stdout_file_f
   exit(1);
 }
 
+
+// Helper function
 int is_built_in_command(char **pgmlist) {
-  return (!strcmp(pgmlist[0], "exit")) || (!strcmp(pgmlist[0], ":q")) || (!strcmp(pgmlist[0], "cd"));
+  return (!strcmp(pgmlist[0], "exit")) || (!strcmp(pgmlist[0], "cd"));
 }
+
 
 // INT (Ctrl-C)
 void catch_sigint(int signum) {
@@ -273,7 +274,6 @@ void catch_sigint(int signum) {
 void catch_sigchld(int signum) {
   // Make sure to handle signal again
   signal(SIGCHLD, catch_sigchld);
-  //fprintf(stderr, "inside << SIGCHLD >>\n");
 
   // Clean up all terminated processes by waiting
   int child_pid;
@@ -301,19 +301,19 @@ void catch_sigchld(int signum) {
       p = p->next;
     }
 
-    if (is_fg_process) {
-      //fprintf(stderr, "foreground process terminated: %i\n", child_pid);
-    } else {
+    if (!is_fg_process) {
       fprintf(stderr, "background process terminated: %i\n", child_pid);
       if (current_pdl == NULL) {
         // There are no fg processes, bring up prompt again
         printf("> ");
         fflush(stdout);
       }
-    }
+    } 
   }
 }
 
+
+// Helper method printing when fork fails
 int fork_failed(int pid) {
   if (pid == -1) {
     fprintf(stderr, "fork failed!\n");
@@ -321,6 +321,7 @@ int fork_failed(int pid) {
   }
   return 0;
 }
+
 
 /* 
  * Print a Comcand structure as returned by parse on stdout. 

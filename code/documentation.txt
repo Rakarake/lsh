@@ -10,7 +10,14 @@ same group id as the process id itself, this is to prevent the SIGINT (Ctrl-C)
 to reach them. They also are not registered as foreground processes in the
 linked list (explained next).
 
-3. When a foreground process is launched, the shell (parent process) registers
+3. The elements in the Cmd linked list (elements of type Pgm*) are read
+and processes are forked, all by the lsh parent process. When forking
+a process, at that time, the read end of the previous processe's pipe
+has become the write end, and a new read pipe has been created for the new
+process if there is a remaining processes after that.
+The pipe file descriptors are set to 0 to indicate not to connect to any
+pipe.
+When a foreground process is launched, the shell (parent process) registers
 the PID of the child process in a linked list.
 This is done, so that when a process is caught in the handler for SIGCHLD,
 the shell knows 1. if it was a foreground or background process 2. if
@@ -20,6 +27,11 @@ the shell prints that it happened, this would not be possible without
 remembering at least the foreground processes. Also if there are any running
 foreground processes, when the background process is catched no new prompt
 should be printed.
+We decided to use a linked list to remember PID:s instead of
+a "stateless" approach, such as having an extra process between the
+root and the actual programs. If you look in top at bash or zsh,
+all the programs are direct children of the root shell process,
+so we decide to take that approach as well.
 
 4. Input/output redirection is firstly initiated early in the RunCommand
 function, it creates file handles with the open function if the strings rstdin and

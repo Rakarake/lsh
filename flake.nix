@@ -9,6 +9,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         deps = with pkgs; [
+          gcc
           readline
         ];
       in

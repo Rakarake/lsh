@@ -14,18 +14,18 @@
         ];
       in
       {
-        #defaultPackage = pkgs.stdenv.mkDerivation {
-        #  name = "lsh";
-        #  src = ./.;
-        #  buildInputs = deps; 
-        #  buildPhase = ''
-        #    gcc -o lsh main.c $(pkg-config --cflags --libs sdl2)
-        #  '';
-        #  installPhase = ''
-        #    mkdir -p $out/bin
-        #    cp sdl2-test $out/bin
-        #  '';
-        #};
+        defaultPackage = pkgs.stdenv.mkDerivation {
+          name = "lsh";
+          src = ./.;
+          buildInputs = deps; 
+          buildPhase = ''
+            gcc -lreadline -o lsh lsh.c parse.c
+          '';
+          installPhase = ''
+            mkdir -p $out/bin
+            cp lsh $out/bin
+          '';
+        };
         devShell = pkgs.mkShell {
           buildInputs = deps;
         };
